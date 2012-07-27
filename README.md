@@ -14,6 +14,7 @@ Requirements
 
 * [Python](http://python.org), version 2.6 or greater
 * [SQLAlchemy](http://sqlalchemy.org), a popular ORM for Python
+* [sweet](http://github.com/darvid/sweet)
 
 [AutoCode](http://code.google.com/p/sqlautocode/) is an optional dependency that
 is highly recommended if you want to extend this library in any way. It was used
