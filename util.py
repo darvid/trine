@@ -5,7 +5,7 @@ from models.world import ItemTemplate
 _custom_ids = {}
 
 
-def get_items(session, items, order_by=desc(ItemTemplate.ItemLevel)):
+def get_items(session, items, filters=[], order_by=desc(ItemTemplate.ItemLevel)):
     """Retrieve one or more items from the `item_template` table.
 
     By default, only the first matching item result is returned.
@@ -23,16 +23,23 @@ def get_items(session, items, order_by=desc(ItemTemplate.ItemLevel)):
     for item_name in items:
         if callable(item_name): item_name = item_name()
         if "%" in item_name:
-            result += query.filter(
-                ItemTemplate.name.like(item_name)).all()
+            subresult = query.filter(ItemTemplate.name.like(item_name)).all()
         elif item_name.endswith("^"):
-            result += [query.filter_by(name=item_name[:-1]).\
-                order_by(order_by).\
-                first()]
+            subresult = [
+                query.filter_by(name=item_name[:-1]).\
+                    order_by(order_by).\
+                    first()
+            ]
         elif item_name.endswith("*"):
-            result += query.filter_by(name=item_name[:-1]).all()
+            subresult = query.filter_by(name=item_name[:-1]).all()
         else:
-            result += [query.filter(ItemTemplate.name == item_name).first()]
+            subresult = [query.filter(ItemTemplate.name == item_name).first()]
+        if filters:
+            for item in subresult:
+                for item_filter in filters:
+                    if not item_filter(item):
+                        subresult.remove(item)
+        result += subresult
     return result
 
 
@@ -43,3 +50,9 @@ def init_custom_id(name, num):
 def incr_custom_id(name):
     _custom_ids[name] += 1
     return _custom_ids[name]
+
+def get_custom_id(name):
+    return _custom_ids[name]
+
+def get_last_custom_id(name):
+    return get_custom_id(name) - 1

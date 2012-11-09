@@ -26,16 +26,10 @@ class bcolors:
 
 
 def call_operation(session, script_name, operation):
-    try:
-        module = __import__("scripts." + script_name, fromlist=["scripts"])
-        getattr(module, operation)(session)
-        return True
-    except AttributeError, err:
-        print err
-        print(bcolors.FAIL + "error: " + bcolors.ENDC + "invalid operation")
-    except Exception, err:
-        print err
-        print(bcolors.FAIL + "error: " + bcolors.ENDC + err.message)
+    module = __import__("scripts." + script_name, fromlist=["scripts"])
+    getattr(module, operation)(session)
+    return True
+
 
 
 def main():

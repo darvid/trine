@@ -18,7 +18,7 @@ _a = AttrDict
 
 
 def _repr(inst):
-    return "<{}('{}')>".format(inst.__class__.__name__,
+    return "<{0}('{1}')>".format(inst.__class__.__name__,
         getattr(inst, "display_name", "Unknown"))
 
 
@@ -141,7 +141,7 @@ CLASS_RACE_COMBOS = {
         ChrClasses.WARLOCK, ChrClasses.DEATH_KNIGHT
     ),
 }
-    
+
 
 class NpcFlag(object):
 
@@ -203,7 +203,7 @@ class InventoryType(object):
     QUIVER          = 27
     RELIC           = 28
 
-    
+
 class Trainer(object):
 
     TYPE_CLASS       = 0
