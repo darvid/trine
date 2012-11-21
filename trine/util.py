@@ -5,10 +5,13 @@ from sqlalchemy.sql.expression import Executable, ClauseElement
 from trine import constants
 from trine.models import world
 
+from sweet.structures.list import flatten
+
 
 _col_constants_mapping = {
     'AllowableClass': constants.ChrClasses,
     'npcflag': constants.NpcFlag,
+    'race': constants.ChrRaces
 }
 _custom_ids = {}
 
@@ -30,13 +33,19 @@ def get_cmp(table, col_name, value):
     col = getattr(table.c, col_name)
 
     neg = False
-    if value.startswith("!"):
+    cmp_in = False
+
+    if isinstance(value, basestring) and value.startswith("!"):
         value = value[1:]
         neg = True
 
+    if isinstance(value, basestring) and value.startswith("in "):
+        value = value[3:]
+        cmp_in = True
+
     flags = get_flags(col_name, value)
     if flags is not None:
-        value = col == flags
+        value = col.in_(flags) if cmp_in else (col == flags)
 
     if isinstance(value, basestring) and "%" in value:
         value = col.like(value)
@@ -58,12 +67,27 @@ def get_flags(col_name, values):
     const_group = _col_constants_mapping[col_name]
     flags = []
     for value in values:
+        if isinstance(value, int):
+            flags.append(value)
+            continue
         const_name = value.upper().replace(" ", "_")
         const = getattr(const_group, const_name)
         if isinstance(const, (constants.Race, constants.Class)):
             const = const.binary
         flags.append(const)
-    return sum(flags)
+    if not tuple in map(type, flags):
+        return sum(flags)
+    else:
+        def convert(flags_):
+            if isinstance(flags_, (list, tuple)):
+                flags_ = list(flags_)
+                for index, flag in enumerate(flags_):
+                    try:
+                        flags_[index] = flag.id
+                    except AttributeError:
+                        pass
+            return flags_
+        return flatten(map(convert, flags))
 
 
 def get_items(session, items, filters=[], order_by=desc(world.ItemTemplate.ItemLevel)):
@@ -80,11 +104,11 @@ def get_items(session, items, filters=[], order_by=desc(world.ItemTemplate.ItemL
     returned.
     """
     result = []
-    query = session.query(models.world.ItemTemplate)
+    query = session.query(world.ItemTemplate)
     for item_name in items:
         if callable(item_name): item_name = item_name()
         if "%" in item_name:
-            subresult = query.filter(models.world.ItemTemplate.name.like(item_name)).all()
+            subresult = query.filter(world.ItemTemplate.name.like(item_name)).all()
         elif item_name.endswith("^"):
             subresult = [
                 query.filter_by(name=item_name[:-1]).\
@@ -94,7 +118,7 @@ def get_items(session, items, filters=[], order_by=desc(world.ItemTemplate.ItemL
         elif item_name.endswith("*"):
             subresult = query.filter_by(name=item_name[:-1]).all()
         else:
-            subresult = [query.filter(models.world.ItemTemplate.name == item_name).first()]
+            subresult = [query.filter(world.ItemTemplate.name == item_name).first()]
         if filters:
             for item in subresult:
                 for item_filter in filters:
@@ -105,7 +129,7 @@ def get_items(session, items, filters=[], order_by=desc(world.ItemTemplate.ItemL
 
 
 def get_table(model_name):
-    for db in [models.world]:
+    for db in [world]:
         obj = getattr(db, model_name, None)
         if obj is None:
             continue

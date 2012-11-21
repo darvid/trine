@@ -9,6 +9,7 @@ import yaml
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql.expression import _BinaryExpression
 
 from sweet.io.fs import file_local_path, path
 from sweet.structures.dict import AttrDict
@@ -84,6 +85,10 @@ class Model(object):
                 items = values.table.bind.execute(values.build()).fetchall()
                 self.data["items"] = flatten(items)
 
+            elif col_name == "where":
+                for where_col_name, value in values.items():
+                    self.data["where"][where_col_name] = get_cmp(self.table, where_col_name, value)
+
     def build_queries(self):
         queries = []
         where = []
@@ -92,10 +97,7 @@ class Model(object):
             for column in self.table.columns:
                 if column.name in self.data:
                     values[column] = self.data[column.name]
-            query = self.table.update().values(values)
-            for col_name, value in self.data["where"].items():
-                where.append(get_cmp(self.table, col_name, value))
-                query = query.where(where[-1])
+            query = self.table.update().values(values).where(*[c for n, c in self.data["where"].items()])
             queries.append(query)
 
         if "items" in self.data:
@@ -122,8 +124,17 @@ class Model(object):
                 self.data[column.name] is None):
                 self.data[column.name] = ""
             all_cols[schema.Optional(column.name)] = column.type.python_type
-        all_cols[schema.Optional("where")] = all_cols
-        all_cols[schema.Optional("items")] = object
+        if self.method == "update":
+            where = all_cols["where"] = {}
+            for col_name, value in all_cols.items():
+                if col_name == "where": continue
+                if isinstance(col_name, schema.Optional):
+                    col_name = col_name._schema
+                if col_name in util._col_constants_mapping:
+                    value = lambda o: isinstance(o, _BinaryExpression)
+                where[schema.Optional(col_name)] = value
+            schema.Schema(all_cols["where"]).validate(self.data["where"])
+        all_cols[schema.Optional("items")] = lambda o: isinstance(o, util.SelectQueryBuilder)
         schema.Schema(all_cols).validate(self.data)
 
     def __repr__(self):
@@ -194,7 +205,7 @@ def main():
     for documents in [p.glob("*.yml") for p in search_path]:
         for spec in documents:
             if spec.name == "config.yml": continue
-            if args.spec == "all" or args.spec == spec.name:
+            if args.spec == "all" or spec.name.startswith(args.spec):
                 specs.append(spec)
                 if args.spec == spec.name:
                     break
