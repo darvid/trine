@@ -101,8 +101,9 @@ class Model(object):
             queries.append(query)
 
         if "items" in self.data:
-            entry = self.table.bind.execute(select([self.table.columns.entry]).where(*where))\
-                .fetchone()["entry"]
+            entry = self.table.bind.execute(
+                    select([self.table.columns.entry]).where(*self.data["where"].values())
+                ).fetchone()["entry"]
             vendor = get_table("NpcVendor")
             slot = 0
             for item in self.data["items"]:
@@ -130,11 +131,10 @@ class Model(object):
                 if col_name == "where": continue
                 if isinstance(col_name, schema.Optional):
                     col_name = col_name._schema
-                if col_name in util._col_constants_mapping:
-                    value = lambda o: isinstance(o, _BinaryExpression)
+                value = lambda o: isinstance(o, _BinaryExpression)
                 where[schema.Optional(col_name)] = value
             schema.Schema(all_cols["where"]).validate(self.data["where"])
-        all_cols[schema.Optional("items")] = lambda o: isinstance(o, util.SelectQueryBuilder)
+        all_cols[schema.Optional("items")] = list
         schema.Schema(all_cols).validate(self.data)
 
     def __repr__(self):
@@ -173,8 +173,8 @@ def main():
     parser.add_argument("-w", "--working-directory", dest="path",
         default=path("."), nargs="?", help="specify path to YAML documents")
     parser.add_argument("spec", help="name of spec or 'all'")
-    parser.add_argument("operation", help="[clean|execute|ddl]", nargs="?",
-        default="ddl")
+    parser.add_argument("operation", help="[clean|execute|dml]", nargs="?",
+        default="dml")
     args = parser.parse_args()
 
     wd = path(args.path)
@@ -218,6 +218,6 @@ def main():
     for spec in specs:
         spec = SpecFile.load_from(spec)
 
-        if args.operation.lower() == "ddl":
+        if args.operation.lower() == "dml":
             for bind, query in spec.build_all_queries():
                 printquery(query, bind)
