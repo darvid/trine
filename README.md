@@ -20,18 +20,20 @@ but a rather tedious one. Without trine, your options are pretty limited:
 With *trine*, you can forget about looking up flags and item IDs everytime you want
 to do something trivial like creating and populating a vendor.
 
-    CreatureTemplate:
-      - method: update
+```yaml
+CreatureTemplate:
+  - method: update
+    where:
+        name: Druid Trainer
+    subname:
+    npcflag: [GOSSIP, TRAINER, VENDOR]
+    items: !query
+        model: ItemTemplate
+        what: entry
         where:
-            name: Druid Trainer
-        subname:
-        npcflag: [GOSSIP, TRAINER, VENDOR]
-        items: !query
-            model: ItemTemplate
-            what: entry
-            where:
-                name: Glyph of %
-                AllowableClass: DRUID
+            name: Glyph of %
+            AllowableClass: DRUID
+```
 
 # Requirements
 
@@ -56,12 +58,14 @@ for numerous TrinityCore tables.
 Save the following in the working directory (specified by `-w`) or `~/.trine/` as
 `config.yml`.
 
-    db:
-        type: mysql
-        username: trinity
-        password: password
-        host: localhost
-        world_db: world
+```yaml
+db:
+    type: mysql
+    username: trinity
+    password: password
+    host: localhost
+    world_db: world
+```
 
 
 # Usage
