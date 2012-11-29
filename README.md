@@ -1,8 +1,8 @@
 # trine: translating english to DML since 2012
 
 *Trine* is a utility for World of Warcraft emulators (e.g. TrinityCore) that
-uses YAML as a DML (data manipulation language) to interface with the emulator
-database.
+uses [YAML](http://yaml.org/) as a DML (data manipulation language) to
+interface with an emulator's database(s).
 
 ## Why use trine?
 
@@ -18,22 +18,29 @@ but a rather tedious one. Without trine, your options are pretty limited:
   the `npc_vendor` table for each glyph to be sold.
 
 With *trine*, you can forget about looking up flags and item IDs everytime you want
-to do something trivial like creating and populating a vendor.
+to do something trivial like creating and populating a vendor. The following YAML
+document takes an existing NPC by the name of *"Druid Trainer"*, flags it both as
+a class trainer and vendor, and populates the `npc_vendor` table with Druid-only
+glyphs related to the vendor:
 
 ```yaml
-CreatureTemplate:
-  - method: update
+npc:
+  - method: UPDATE
     where:
         name: Druid Trainer
     subname:
     npcflag: [GOSSIP, TRAINER, VENDOR]
     items: !query
-        model: ItemTemplate
+        model: item
         what: entry
         where:
             name: Glyph of %
             AllowableClass: DRUID
 ```
+
+*Trine* comes with a small subset of named flags and identifiers obtained from
+`.dbc` files (in English only for now, unfortunately). These [constants][const_py]
+allow for the use of human friendly identifiers such as `DRUID` rather than `11`.
 
 # Requirements
 
@@ -67,18 +74,17 @@ db:
     world_db: world
 ```
 
-
 # Usage
 
     usage: trine [-h] [-w [PATH]] spec [operation]
 
     positional arguments:
       spec                  name of spec or 'all'
-      operation             [clean|execute|dml]
+      operation             [execute|dml]
 
     optional arguments:
       -h, --help            show this help message and exit
-      -w [PATH], --working-directory [PATH]
+      -w [PATH], --working-wdirectory [PATH]
                             specify path to YAML documents
 
 ## Working directories
@@ -89,3 +95,57 @@ your files organized.
 
 By default, trine looks for `.yml` files in `~/.trine/` - but you can specify a
 different working directory with the `-w` option.
+
+## Operations
+
+*Trine* supports two main operations:
+
+* **execute** - executes and commits all changes made by given schema files to
+  the database.
+* **dml** - outputs generated SQL queries to standard output, but does not
+  execute any queries.
+
+# Schema Structure
+
+*Trine* expects a mapping of mappings representing model (table) names and their
+respective schemas. This forces the user to organize schemas by model name. For
+example:
+
+```yaml
+--- # item prices
+item:
+  - method: UPDATE
+    where:
+        name: Glyph of %
+    SellPrice: 0
+  - method: UPDATE
+    where:
+      name: Black Jelly
+    SellPrice: 100
+```
+
+## Methods
+
+Rather than use verbs such as in SQL (`SELECT`, `INSERT`, `UPDATE`), *Trine* uses
+*"methods"* that are indicative of commonly used operations when manipulating
+emulator databases.
+
+### UPDATE
+
+This method expects a `where` mapping and issues a SQL `UPDATE` based on the rest
+of the schema mapping.
+
+### MERGE
+
+This method expects a `merge-from` key that is either the `entry` of another row
+from the same table as the current schema, or a `where` mapping. **MERGE** is
+particularly useful for custom NPCs or items, as it simplifies both the process
+of creating them as well as updating them.
+
+## Documents
+
+Each YAML file can contain any number of documents, which are delimited by three
+dashes (`---`). Currently, documents do not have any special purpose in *Trine*
+other than providing a means of organization.
+
+[const_py]: https://github.com/darvid/trine/blob/master/trine/constants.py
