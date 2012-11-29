@@ -4,7 +4,6 @@ import yaml
 
 from sqlalchemy.sql import and_, or_, not_, select
 
-import constants
 from trine.util import get_cmp, get_flags, get_table, printquery
 
 
@@ -34,7 +33,6 @@ class SelectQueryBuilder(yaml.YAMLObject):
     @property
     def table(self):
         return get_table(self.model)
-
 
     def __repr__(self):
         return "<{0}(model='{1}', where={2})>".format(
