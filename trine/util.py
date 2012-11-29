@@ -11,9 +11,15 @@ from sweet.structures.list import flatten
 _col_constants_mapping = {
     'AllowableClass': constants.ChrClasses,
     'npcflag': constants.NpcFlag,
-    'race': constants.ChrRaces
+    'race': constants.ChrRaces,
+    'faction_H': constants.FactionTemplate,
+    'faction_A': constants.FactionTemplate,
 }
 _custom_ids = {}
+_table_aliases = {
+    "CreatureTemplate": ["npc"],
+    "ItemTemplate": ["item"],
+}
 
 
 class InsertFromSelect(Executable, ClauseElement):
@@ -129,6 +135,9 @@ def get_items(session, items, filters=[], order_by=desc(world.ItemTemplate.ItemL
 
 
 def get_table(model_name):
+    for real_model_name, aliases in _table_aliases.items():
+        if model_name.lower() in aliases:
+            model_name = real_model_name
     for db in [world]:
         obj = getattr(db, model_name, None)
         if obj is None:
