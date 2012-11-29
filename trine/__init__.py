@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Generate DB structures for WoW emulators with YAML."""
+import abc
 import argparse
 import logging
 import sys
@@ -7,7 +8,7 @@ import sys
 import schema
 import yaml
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, exists
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import _BinaryExpression
 
@@ -16,7 +17,7 @@ from sweet.structures.dict import AttrDict
 from sweet.structures.list import flatten
 
 from trine.models import initialize_world_db_connection, world, WorldDBSession
-from trine.util import _col_constants_mapping, get_cmp, get_flags, get_table, printquery, InsertFromSelect
+from trine.util import _col_constants_mapping, get_cmp, get_flags, get_table, printquery
 from trine import yamlobjects
 
 
@@ -31,11 +32,15 @@ class SpecFile(object):
             documents = [documents]
         self.documents = documents
         self.from_file = path(from_file)
-        schema.Schema([{str: [dict]}]).validate(self.documents)
 
         self.models = []
         for document in self.documents:
-            self.models += [Model(n, d) for n, i in document.items() for d in i]
+            for name, documents in document.items():
+                if not name.startswith("_"):
+                    for data in documents:
+                        model = Model(name, data)
+                        model.validate()
+                        self.models.append(model)
 
         for model in self.models:
             model.validate()
@@ -70,6 +75,9 @@ class Model(object):
         self.data = data
         self.process()
 
+    def _execute(self, *args, **kwargs):
+        return self.table.bind.execute(*args, **kwargs)
+
     def process(self):
         for col_name, values in self.data.items():
             flags = get_flags(col_name, values)
@@ -80,8 +88,6 @@ class Model(object):
 
             # vendor items
             elif col_name == "items" and values is not None:
-                # items = spec.pop("items", None)
-                assert values.model == "ItemTemplate"
                 items = values.table.bind.execute(values.build()).fetchall()
                 self.data["items"] = flatten(items)
 
@@ -97,21 +103,50 @@ class Model(object):
             for column in self.table.columns:
                 if column.name in self.data:
                     values[column] = self.data[column.name]
-            query = self.table.update().values(values).where(*[c for n, c in self.data["where"].items()])
-            queries.append(query)
+            queries.append(self.table.update()\
+                .values(values)\
+                .where(*[c for n, c in self.data["where"].items()]))
 
         if "items" in self.data:
-            entry = self.table.bind.execute(
-                    select([self.table.columns.entry]).where(*self.data["where"].values())
-                ).fetchone()["entry"]
+            entry = self._execute(
+                select([self.table.columns.entry]).\
+                where(*self.data["where"].values())).fetchone()["entry"]
             vendor = get_table("NpcVendor")
             slot = 0
+            queries.append(vendor.delete().where(vendor.columns.entry == entry))
             for item in self.data["items"]:
-                # queries.append(InsertFromSelect(vendor,
-                #     select(["entry", slot, item, 0, 0, 0]).where(*where),
-                # ))
-                queries.append(vendor.insert().values(entry=entry, slot=slot, item=item))
-                slot += 1
+                queries.append(vendor.insert().values(
+                    entry=entry,
+                    slot=slot,
+                    item=item,
+                    maxcount=0,
+                    incrtime=0,
+                    ExtendedCost=0
+                ))
+                item += 1
+
+        if self.method == "merge" and "merge-from" in self.data:
+            merge_from = self.data["merge-from"]
+
+            if isinstance(merge_from, dict):
+                for col_name, value in merge_from.items():
+                    merge_from[col_name] = get_cmp(self.table, col_name, value)
+                query = self.table.select().where(*merge_from.values())
+            else:
+                query = self.table.select().where({"entry": merge_from})
+            templ = dict(self.table.bind.execute(query).fetchone())
+            for col_name, value in self.data.items():
+                if col_name in templ:
+                    templ[col_name] = value
+
+            if (self._execute(select([exists().where(
+                self.table.c.entry == templ["entry"])])).scalar()):
+                queries.append(self.table.update()\
+                    .where(self.table.c.entry == templ["entry"])\
+                    .values(**templ))
+            else:
+                queries.append(self.table.insert().values(**templ))
+
         return queries
 
 
@@ -135,6 +170,7 @@ class Model(object):
                 where[schema.Optional(col_name)] = value
             schema.Schema(all_cols["where"]).validate(self.data["where"])
         all_cols[schema.Optional("items")] = list
+        all_cols[schema.Optional("merge-from")] = schema.Or(dict, int)
         schema.Schema(all_cols).validate(self.data)
 
     def __repr__(self):
