@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy import desc
 from sqlalchemy.ext import compiler
 from sqlalchemy.sql.expression import Executable, ClauseElement
@@ -6,6 +8,9 @@ from trine import constants
 from trine.models import world
 
 from sweet.structures.list import flatten
+
+
+log = logging.getLogger("trine")
 
 
 _col_constants_mapping = {
@@ -40,20 +45,28 @@ def get_cmp(table, col_name, value):
 
     neg = False
     cmp_in = False
+    regex = False
 
-    if isinstance(value, basestring) and value.startswith("!"):
+    is_string = isinstance(value, basestring)
+
+    if is_string and value.startswith("!"):
         value = value[1:]
         neg = True
 
-    if isinstance(value, basestring) and value.startswith("in "):
+    if is_string and value.startswith("/") and value.endswith("/"):
+        value = value[1:-1]
+        regex = True
+
+    elif is_string and value.startswith("in "):
         value = value[3:]
         cmp_in = True
 
     flags = get_flags(col_name, value)
     if flags is not None:
         value = col.in_(flags) if cmp_in else (col == flags)
-
-    if isinstance(value, basestring) and "%" in value:
+    elif regex:
+        value = col.op("rlike")(value)
+    elif is_string and "%" in value:
         value = col.like(value)
         if neg:
             value = not_(value)

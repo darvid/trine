@@ -88,7 +88,21 @@ class Model(object):
 
             # vendor items
             elif col_name == "items" and values is not None:
-                items = values.table.bind.execute(values.build()).fetchall()
+                items = []
+                item_table = world.ItemTemplate.__table__
+                if not isinstance(values, list):
+                    values = [values]
+                for query in values:
+                    if isinstance(query, basestring):
+                        items.append(item_table.bind.execute(
+                            select([item_table.c.entry]).where(
+                                get_cmp(item_table, "name", query)
+                            )
+                        ).fetchone())
+                    elif isinstance(query, int):
+                        items.append(query)
+                    else:
+                        items += item_table.bind.execute(query.build()).fetchall()
                 self.data["items"] = flatten(items)
 
             elif col_name == "where":
@@ -106,24 +120,6 @@ class Model(object):
             queries.append(self.table.update()\
                 .values(values)\
                 .where(*[c for n, c in self.data["where"].items()]))
-
-        if "items" in self.data:
-            entry = self._execute(
-                select([self.table.columns.entry]).\
-                where(*self.data["where"].values())).fetchone()["entry"]
-            vendor = get_table("NpcVendor")
-            slot = 0
-            queries.append(vendor.delete().where(vendor.columns.entry == entry))
-            for item in self.data["items"]:
-                queries.append(vendor.insert().values(
-                    entry=entry,
-                    slot=slot,
-                    item=item,
-                    maxcount=0,
-                    incrtime=0,
-                    ExtendedCost=0
-                ))
-                item += 1
 
         if self.method == "merge" and "merge-from" in self.data:
             merge_from = self.data["merge-from"]
@@ -146,6 +142,29 @@ class Model(object):
                     .values(**templ))
             else:
                 queries.append(self.table.insert().values(**templ))
+
+        if "items" in self.data:
+            entry = None
+            if "entry" in self.data:
+                entry = self.data["entry"]
+            elif "where" in self.data:
+                entry = self._execute(
+                    select([self.table.columns.entry]).\
+                    where(*self.data["where"].values())).fetchone()["entry"]
+            assert entry is not None, "missing creature_template entry"
+            vendor = get_table("NpcVendor")
+            slot = 0
+            queries.append(vendor.delete().where(vendor.columns.entry == entry))
+            for item in self.data["items"]:
+                queries.append(vendor.insert().values(
+                    entry=entry,
+                    slot=slot,
+                    item=item,
+                    maxcount=0,
+                    incrtime=0,
+                    ExtendedCost=0
+                ))
+                slot += 1
 
         return queries
 
@@ -209,9 +228,14 @@ def main():
     parser.add_argument("-w", "--working-directory", dest="path",
         default=path("."), nargs="?", help="specify path to YAML documents")
     parser.add_argument("spec", help="name of spec or 'all'")
-    parser.add_argument("operation", help="[clean|execute|dml]", nargs="?",
+    parser.add_argument("operation", help="[execute|dml]", nargs="?",
         default="dml")
     args = parser.parse_args()
+
+    op = args.operation.lower()
+    if op not in ("execute", "dml"):
+        log.error("invalid operation")
+        sys.exit(1)
 
     wd = path(args.path)
     search_path = [wd]
@@ -254,6 +278,10 @@ def main():
     for spec in specs:
         spec = SpecFile.load_from(spec)
 
-        if args.operation.lower() == "dml":
-            for bind, query in spec.build_all_queries():
+        queries = spec.build_all_queries()
+
+        for bind, query in queries:
+            if op == "dml":
                 printquery(query, bind)
+            elif op == "execute":
+                bind.execute(query)

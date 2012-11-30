@@ -10,6 +10,18 @@ from trine.util import get_cmp, get_flags, get_table, printquery
 log = logging.getLogger("trine")
 
 
+def _query(model, what, where):
+    table = get_table(model)
+    if table is None:
+        log.error("invalid model name: {0}".format(model))
+        raise
+    _where = []
+    for col_name, value in where.items():
+        _where.append(get_cmp(table, col_name, value))
+    query = select([getattr(table.c, what)], and_(*_where))
+    return query
+
+
 class SelectQueryBuilder(yaml.YAMLObject):
     yaml_tag = u"!query"
 
@@ -20,15 +32,7 @@ class SelectQueryBuilder(yaml.YAMLObject):
         self.where = where
 
     def build(self):
-        table = get_table(self.model)
-        if table is None:
-            log.error("invalid model name: {0}".format(self.model))
-            raise
-        where = []
-        for col_name, value in self.where.items():
-            where.append(get_cmp(table, col_name, value))
-        query = select([getattr(table.c, self.what)], and_(*where))
-        return query
+        return _query(self.model, self.what, self.where)
 
     @property
     def table(self):
@@ -40,6 +44,19 @@ class SelectQueryBuilder(yaml.YAMLObject):
             self.model,
             self.where
         )
+
+
+class SelectItemBuilder(SelectQueryBuilder):
+    yaml_tag = u"!getitems"
+
+    def __init__(self, **where):
+        pass
+
+    def build(self):
+        return _query("ItemTemplate", "entry", self.__dict__)
+
+    def __repr__(self):
+        return "<{0}(where={1})>".format(self.__class__.__name__, self.__dict__)
 
 
 def install():
