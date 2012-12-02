@@ -10,6 +10,7 @@ import yaml
 
 from sqlalchemy import create_engine, select, exists
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql import and_, or_
 from sqlalchemy.sql.expression import _BinaryExpression
 
 from sweet.io.fs import file_local_path, path
@@ -99,6 +100,8 @@ class Model(object):
                                 get_cmp(item_table, "name", query)
                             )
                         ).fetchone())
+                        if items[-1] is None:
+                            log.error("could not find entry for '{0}'".format(query))
                     elif isinstance(query, int):
                         items.append(query)
                     else:
@@ -106,8 +109,14 @@ class Model(object):
                 self.data["items"] = flatten(items)
 
             elif col_name == "where":
-                for where_col_name, value in values.items():
-                    self.data["where"][where_col_name] = get_cmp(self.table, where_col_name, value)
+                for where_col_name, values in values.items():
+                    if not isinstance(values, list):
+                        values = [values]
+                    self.data["where"][where_col_name] = []
+                    for value in values:
+                        self.data["where"][where_col_name].append(
+                            get_cmp(self.table, where_col_name, value)
+                        )
 
     def build_queries(self):
         queries = []
@@ -117,9 +126,17 @@ class Model(object):
             for column in self.table.columns:
                 if column.name in self.data:
                     values[column] = self.data[column.name]
-            queries.append(self.table.update()\
-                .values(values)\
-                .where(*[c for n, c in self.data["where"].items()]))
+            query = self.table.update().values(values)
+            where = []
+            for name, exprs in self.data["where"].items():
+                if len(exprs) > 1:
+                    where.append(or_(*exprs))
+                else:
+                    where.append(exprs[0])
+            if len(where) > 1:
+                queries.append(query.where(and_(*where)))
+            else:
+                queries.append(query.where(*where))
 
         if self.method == "merge" and "merge-from" in self.data:
             merge_from = self.data["merge-from"]
@@ -148,9 +165,18 @@ class Model(object):
             if "entry" in self.data:
                 entry = self.data["entry"]
             elif "where" in self.data:
-                entry = self._execute(
-                    select([self.table.columns.entry]).\
-                    where(*self.data["where"].values())).fetchone()["entry"]
+                query = select([self.table.columns.entry])
+                where = []
+                for name, exprs in self.data["where"].items():
+                    if len(exprs) > 1:
+                        where.append(or_(*exprs))
+                    else:
+                        where.append(exprs[0])
+                if len(where) > 1:
+                    query = query.where(and_(*where))
+                else:
+                    query = query.where(*where)
+                entry = self._execute(query).fetchone()["entry"]
             assert entry is not None, "missing creature_template entry"
             vendor = get_table("NpcVendor")
             slot = 0
@@ -185,7 +211,7 @@ class Model(object):
                 if col_name == "where": continue
                 if isinstance(col_name, schema.Optional):
                     col_name = col_name._schema
-                value = lambda o: isinstance(o, _BinaryExpression)
+                value = lambda o: isinstance(o, (list, _BinaryExpression))
                 where[schema.Optional(col_name)] = value
             schema.Schema(all_cols["where"]).validate(self.data["where"])
         all_cols[schema.Optional("items")] = list
