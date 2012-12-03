@@ -11,7 +11,7 @@ import yaml
 from sqlalchemy import create_engine, select, exists
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import and_, or_
-from sqlalchemy.sql.expression import _BinaryExpression
+from sqlalchemy.sql.expression import desc, _BinaryExpression
 
 from sweet.io.fs import file_local_path, path
 from sweet.structures.dict import AttrDict
@@ -80,6 +80,17 @@ class Model(object):
         return self.table.bind.execute(*args, **kwargs)
 
     def process(self):
+        def _process_where(data, table):
+            if not "where" in data:
+                return
+            for where_col_name, values in data["where"].items():
+                if not isinstance(values, list):
+                    values = [values]
+                data["where"][where_col_name] = []
+                for value in values:
+                    data["where"][where_col_name].append(
+                        get_cmp(table, where_col_name, value)
+                    )
         for col_name, values in self.data.items():
             flags = get_flags(col_name, values)
 
@@ -90,33 +101,35 @@ class Model(object):
             # vendor items
             elif col_name == "items" and values is not None:
                 items = []
-                item_table = world.ItemTemplate.__table__
+                item_table = get_table("ItemTemplate")
                 if not isinstance(values, list):
                     values = [values]
-                for query in values:
-                    if isinstance(query, basestring):
-                        items.append(item_table.bind.execute(
-                            select([item_table.c.entry]).where(
-                                get_cmp(item_table, "name", query)
-                            )
-                        ).fetchone())
+                for item in values:
+                    query_append = None
+                    if isinstance(item, basestring):
+                        if item.endswith("^"):
+                            item = item[:-1]
+                            query_append = lambda q: q.order_by(desc(item_table.c.ItemLevel))
+                        query = select([item_table.c.entry])\
+                            .where(get_cmp(item_table, "name", item))
+                        if query_append:
+                            query = query_append(query)
+                        items.append(self._execute(query).fetchone())
                         if items[-1] is None:
-                            log.error("could not find entry for '{0}'".format(query))
-                    elif isinstance(query, int):
-                        items.append(query)
-                    else:
-                        items += item_table.bind.execute(query.build()).fetchall()
+                            log.error("could not find entry for '{0}'".format(item))
+                    elif isinstance(item, int):
+                        items.append(item)
+                    elif isinstance(item, yamlobjects.SelectQueryBuilder):
+                        items += item_table.bind.execute(item.build()).fetchall()
                 self.data["items"] = flatten(items)
 
-            elif col_name == "where":
-                for where_col_name, values in values.items():
-                    if not isinstance(values, list):
-                        values = [values]
-                    self.data["where"][where_col_name] = []
-                    for value in values:
-                        self.data["where"][where_col_name].append(
-                            get_cmp(self.table, where_col_name, value)
-                        )
+            elif col_name == "extended_costs":
+                costs = self.data["extended_costs"]
+                costs = [costs] if not isinstance(costs, list) else costs
+                for cost_spec in costs:
+                    _process_where(cost_spec, get_table("ItemTemplate"))
+
+        _process_where(self.data, self.table)
 
     def build_queries(self):
         queries = []
@@ -160,11 +173,11 @@ class Model(object):
             else:
                 queries.append(self.table.insert().values(**templ))
 
+        vendor = get_table("NpcVendor")
+        entry = self.data["entry"] if "entry" in self.data else None
+
         if "items" in self.data:
-            entry = None
-            if "entry" in self.data:
-                entry = self.data["entry"]
-            elif "where" in self.data:
+            if entry is None and "where" in self.data:
                 query = select([self.table.columns.entry])
                 where = []
                 for name, exprs in self.data["where"].items():
@@ -178,7 +191,6 @@ class Model(object):
                     query = query.where(*where)
                 entry = self._execute(query).fetchone()["entry"]
             assert entry is not None, "missing creature_template entry"
-            vendor = get_table("NpcVendor")
             slot = 0
             queries.append(vendor.delete().where(vendor.columns.entry == entry))
             for item in self.data["items"]:
@@ -188,23 +200,47 @@ class Model(object):
                     item=item,
                     maxcount=0,
                     incrtime=0,
+                    # extended costs are handled separately as it is more likely
+                    # one will want to apply extended costs in bulk rather than
+                    # item by item.
                     ExtendedCost=0
                 ))
                 slot += 1
 
+        if "extended_costs" in self.data:
+            for cost_spec in self.data["extended_costs"]:
+                item_table = get_table("ItemTemplate")
+                query = select([item_table.c.entry])
+                where = []
+                if "where" in cost_spec:
+                    for name, exprs in cost_spec["where"].items():
+                        if len(exprs) > 1:
+                            where.append(or_(*exprs))
+                        else:
+                            where.append(exprs[0])
+                where.append(item_table.c.entry.in_(self.data["items"]))
+                query = query.where(and_(*where) if len(where) > 1 else where[0])
+                item_ids = self._execute(query)
+                for row in item_ids:
+                    queries.append(vendor.update().values(ExtendedCost=cost_spec["cost"])\
+                        .where(and_(vendor.c.entry == entry, vendor.c.item == row[0])))
         return queries
 
 
     def validate(self):
         if self.method == "update" and "where" not in self.data:
             raise schema.SchemaError("Update method requires where dict")
-        all_cols = {}
-        for column in self.table.columns:
-            # schema breaks on values expected to be strings which are None
-            if (column.name in self.data and column.type.python_type == str and
-                self.data[column.name] is None):
-                self.data[column.name] = ""
-            all_cols[schema.Optional(column.name)] = column.type.python_type
+        def _build_all_cols(data, table, use_expr=False):
+            all_cols = {}
+            for column in table.columns:
+                # schema breaks on values expected to be strings which are None
+                if (column.name in data and column.type.python_type == str and
+                    data[column.name] is None):
+                    data[column.name] = ""
+                all_cols[schema.Optional(column.name)] = (column.type.python_type
+                    if not use_expr else lambda o: isinstance(o, (list, _BinaryExpression)))
+            return all_cols
+        all_cols = _build_all_cols(self.data, self.table)
         if self.method == "update":
             where = all_cols["where"] = {}
             for col_name, value in all_cols.items():
@@ -216,6 +252,12 @@ class Model(object):
             schema.Schema(all_cols["where"]).validate(self.data["where"])
         all_cols[schema.Optional("items")] = list
         all_cols[schema.Optional("merge-from")] = schema.Or(dict, int)
+        all_cols[schema.Optional("extended_costs")] = [{
+            schema.Optional("where"): _build_all_cols(
+                self.data.get("extended_costs", {}),
+                get_table("ItemTemplate"), True),
+            "cost": int
+        }]
         schema.Schema(all_cols).validate(self.data)
 
     def __repr__(self):

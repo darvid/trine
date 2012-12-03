@@ -19,6 +19,7 @@ _col_constants_mapping = {
     'race': constants.ChrRaces,
     'faction_H': constants.FactionTemplate,
     'faction_A': constants.FactionTemplate,
+    'InventoryType': constants.InventoryType,
 }
 _custom_ids = {}
 _table_aliases = {

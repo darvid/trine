@@ -1017,7 +1017,7 @@ class InventoryType(object):
     NON_EQUIPABLE   = 0
     HEAD            = 1
     NECK            = 2
-    SHOULDER        = 3
+    SHOULDERS       = 3
     SHIRT           = 4
     CHEST           = 5
     WAIST           = 6
