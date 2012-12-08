@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Trine by darvid</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Trine</h1>
+        <p>using YAML as a DML since 2012</p>
+
+        <p class="view"><a href="https://github.com/darvid/trine">View the Project on GitHub <small>darvid/trine</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/darvid/trine/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/darvid/trine/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/darvid/trine">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>Welcome to less hair-pulling</h1>
+
+<p><em>Trine</em> is a utility for World of Warcraft emulators (e.g. TrinityCore) that
+uses <a href="http://yaml.org/">YAML</a> as a DML (data manipulation language) to
+interface with an emulator's database(s).</p>
+
+<h2>Why use trine?</h2>
+
+<p>Let's say you want to combine glyph vendors with class trainers. A worthy cause,
+but a rather tedious one. Without trine, your options are pretty limited:</p>
+
+<ul>
+<li>You can do everything in-game, using GM commands to manually look up and
+add items to your vendors. If you screw up during this process, or the
+vendor gets deleted, you have to start from scratch.</li>
+<li>You can manually write the SQL required to create the vendor, lookup the
+flags required for a combined vendor/trainer, and lookup the item IDs for
+all glyphs for a particular class, and then create the associated row in
+the <code>npc_vendor</code> table for each glyph to be sold.</li>
+</ul><p>With <em>trine</em>, you can forget about looking up flags and item IDs everytime you want
+to do something trivial like creating and populating a vendor. The following YAML
+document takes an existing NPC by the name of <em>"Druid Trainer"</em>, flags it both as
+a class trainer and vendor, and populates the <code>npc_vendor</code> table with Druid-only
+glyphs related to the vendor:</p>
+
+<div class="highlight"><pre><span class="l-Scalar-Plain">npc</span><span class="p-Indicator">:</span>
+  <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">method</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">UPDATE</span>
+    <span class="l-Scalar-Plain">where</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Druid Trainer</span>
+    <span class="l-Scalar-Plain">subname</span><span class="p-Indicator">:</span>
+    <span class="l-Scalar-Plain">npcflag</span><span class="p-Indicator">:</span> <span class="p-Indicator">[</span><span class="nv">GOSSIP</span><span class="p-Indicator">,</span> <span class="nv">TRAINER</span><span class="p-Indicator">,</span> <span class="nv">VENDOR</span><span class="p-Indicator">]</span>
+    <span class="l-Scalar-Plain">items</span><span class="p-Indicator">:</span> <span class="kt">!query</span>
+        <span class="l-Scalar-Plain">model</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">item</span>
+        <span class="l-Scalar-Plain">what</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">entry</span>
+        <span class="l-Scalar-Plain">where</span><span class="p-Indicator">:</span>
+            <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Glyph of %</span>
+            <span class="l-Scalar-Plain">AllowableClass</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">DRUID</span>
+</pre></div>
+
+<p><em>Trine</em> comes with a small subset of named flags and identifiers obtained from
+<code>.dbc</code> files (in English only for now, unfortunately). These <a href="https://github.com/darvid/trine/blob/master/trine/constants.py">constants</a>
+allow for the use of human friendly identifiers such as <code>DRUID</code> rather than <code>11</code>.</p>
+
+<h1>Requirements</h1>
+
+<ul>
+<li>
+<a href="http://python.org">Python</a>, version 2.6 or greater</li>
+<li><a href="http://pyyaml.org/">PyYAML</a></li>
+<li><a href="http://sqlalchemy.org">SQLAlchemy</a></li>
+<li><a href="https://github.com/halst/schema">schema</a></li>
+<li><a href="http://github.com/darvid/sweet">sweet</a></li>
+<li>An up-to-date <a href="http://www.trinitycore.org/">TrinityCore</a> database.</li>
+</ul><p><a href="http://code.google.com/p/sqlautocode/">AutoCode</a> is an optional dependency that
+is highly recommended if you want to extend this library in any way. It was used
+to generate the model classes for TrinityCore's <strong>world</strong> database.</p>
+
+<p>The only wrinkle is that it does not validate field names to prevent the use of
+Python reserved keywords as column names, so you will have to manually find and
+replace all instances of <em>class</em>, for instance, which is used as the column name
+for numerous TrinityCore tables.</p>
+
+<h1>Configuration</h1>
+
+<p>Save the following in the working directory (specified by <code>-w</code>) or <code>~/.trine/</code> as
+<code>config.yml</code>.</p>
+
+<div class="highlight"><pre><span class="l-Scalar-Plain">db</span><span class="p-Indicator">:</span>
+    <span class="l-Scalar-Plain">type</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">mysql</span>
+    <span class="l-Scalar-Plain">username</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">trinity</span>
+    <span class="l-Scalar-Plain">password</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">password</span>
+    <span class="l-Scalar-Plain">host</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">localhost</span>
+    <span class="l-Scalar-Plain">world_db</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">world</span>
+</pre></div>
+
+<h1>Usage</h1>
+
+<pre><code>usage: trine [-h] [-w [PATH]] spec [operation]
+
+positional arguments:
+  spec                  name of spec or 'all'
+  operation             [execute|dml]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -w [PATH], --working-wdirectory [PATH]
+                        specify path to YAML documents
+</code></pre>
+
+<h2>Working directories</h2>
+
+<p><em>Working directories</em> are simply folders with a <code>config.yml</code> and any number of
+<em>trine</em> schema files (<code>*.yml</code>). They serve no other purpose other than keeping
+your files organized.</p>
+
+<p>By default, trine looks for <code>.yml</code> files in <code>~/.trine/</code> - but you can specify a
+different working directory with the <code>-w</code> option.</p>
+
+<h2>Operations</h2>
+
+<p><em>Trine</em> supports two main operations:</p>
+
+<ul>
+<li>
+<strong>execute</strong> - executes and commits all changes made by given schema files to
+the database.</li>
+<li>
+<strong>dml</strong> - outputs generated SQL queries to standard output, but does not
+execute any queries.</li>
+</ul><h1>Schema Structure</h1>
+
+<p><em>Trine</em> expects a mapping of mappings representing model (table) names and their
+respective schemas. This forces the user to organize schemas by model name. For
+example:</p>
+
+<div class="highlight"><pre><span class="nn">---</span> <span class="c1"># item prices</span>
+<span class="l-Scalar-Plain">item</span><span class="p-Indicator">:</span>
+  <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">method</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">UPDATE</span>
+    <span class="l-Scalar-Plain">where</span><span class="p-Indicator">:</span>
+        <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Glyph of %</span>
+    <span class="l-Scalar-Plain">SellPrice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">0</span>
+  <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">method</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">UPDATE</span>
+    <span class="l-Scalar-Plain">where</span><span class="p-Indicator">:</span>
+      <span class="l-Scalar-Plain">name</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Black Jelly</span>
+    <span class="l-Scalar-Plain">SellPrice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">100</span>
+</pre></div>
+
+<h2>Methods</h2>
+
+<p>Rather than use verbs such as in SQL (<code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>), <em>Trine</em> uses
+<em>"methods"</em> that are indicative of commonly used operations when manipulating
+emulator databases.</p>
+
+<h3>UPDATE</h3>
+
+<p>This method expects a <code>where</code> mapping and issues a SQL <code>UPDATE</code> based on the rest
+of the schema mapping.</p>
+
+<h3>MERGE</h3>
+
+<p>This method expects a <code>merge-from</code> key that is either the <code>entry</code> of another row
+from the same table as the current schema, or a <code>where</code> mapping. <strong>MERGE</strong> is
+particularly useful for custom NPCs or items, as it simplifies both the process
+of creating them as well as updating them.</p>
+
+<h2>Documents</h2>
+
+<p>Each YAML file can contain any number of documents, which are delimited by three
+dashes (<code>---</code>). Currently, documents do not have any special purpose in <em>Trine</em>
+other than providing a means of organization.</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/darvid">darvid</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
