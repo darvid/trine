@@ -88,9 +88,16 @@ class Model(object):
                     values = [values]
                 data["where"][where_col_name] = []
                 for value in values:
-                    data["where"][where_col_name].append(
-                        get_cmp(table, where_col_name, value)
-                    )
+                    if isinstance(value, yamlobjects.SelectQueryBuilder):
+                        rows = flatten(self._execute(value.build()).fetchall())
+                        for field in rows:
+                            data["where"][where_col_name].append(
+                                get_cmp(table, where_col_name, field)
+                            )
+                    else:
+                        data["where"][where_col_name].append(
+                            get_cmp(table, where_col_name, value)
+                        )
         for col_name, values in self.data.items():
             flags = get_flags(col_name, values)
 
@@ -151,7 +158,7 @@ class Model(object):
             else:
                 queries.append(query.where(*where))
 
-        if self.method == "merge" and "merge-from" in self.data:
+        elif self.method == "merge" and "merge-from" in self.data:
             merge_from = self.data["merge-from"]
 
             if isinstance(merge_from, dict):
@@ -172,6 +179,23 @@ class Model(object):
                     .values(**templ))
             else:
                 queries.append(self.table.insert().values(**templ))
+
+        elif self.method == "create":
+            data = dict([(k, v) for k, v in self.data.items() if k not in
+                ("method", "merge-from", "items", "extended_costs")])
+            pk = None
+            for col_name, value in data.items():
+                if getattr(getattr(self.table.c, col_name), "primary_key"):
+                    pk = col_name
+            assert pk, "Could not find a primary key for model `{0}`, use "\
+                "the MERGE or UPDATE methods instead.".format(self.name)
+            pk_col = getattr(self.table.c, pk)
+            if (self._execute(select([exists().where(pk_col == data[pk])])).scalar()):
+                queries.append(self.table.update()\
+                    .where(pk_col == data[pk])\
+                    .values(**data))
+            else:
+                queries.append(self.table.insert().values(**data))
 
         vendor = get_table("NpcVendor")
         entry = self.data["entry"] if "entry" in self.data else None
