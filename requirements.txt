@@ -5,5 +5,6 @@ argparse==1.2.1
 ordereddict==1.1
 schema==0.1.1
 sqlautocode==0.7
+tarjan==0.1.2
+clint==0.3.1
 -e git+http://github.com/darvid/sweet@988bfd5e66917544fec83e682770498409ba677b#egg=sweet-dev
--e git+http://github.com/darvid/trine@e792fc7d256e1ab7384b5bd9584973f6ce52f448#egg=trine-dev
