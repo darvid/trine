@@ -1,3 +1,14 @@
+"""
+    trine.models
+    ~~~~~~~~~~~~
+
+    Provides SQLAlchemy table definitions for TrinityCore.
+
+    :todo: add support for other emulators and databases (e.g. auth, character)
+
+    :copyright: Copyright 2012 by David Gidwani
+    :license: BSD, see LICENSE for details.
+"""
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session, sessionmaker
 

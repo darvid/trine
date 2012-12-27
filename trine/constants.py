@@ -1,4 +1,13 @@
-"""Contains data mostly retrieved from DBC files."""
+"""
+    trine.constants
+    ~~~~~~~~~~~~~~~
+
+    Provides enumeration-like access to commonly used numeric constants and bit
+    flags.
+
+    :copyright: Copyright 2012 by David Gidwani
+    :license: BSD, see LICENSE for details.
+"""
 from sweet.structures.dict import AttrDict
 
 
@@ -33,6 +42,9 @@ class Race(AttrDict):
 
 
 class ChrClasses(object):
+    """
+    Contains the values found within the ``ChrClasses`` DBC.
+    """
 
     WARRIOR = Class(display_name="Warrior", binary=1,      id=1)
     PALADIN = Class(display_name="Paladin", binary=2 << 0, id=2)
@@ -56,6 +68,9 @@ class ChrClasses(object):
 
 
 class ChrRaces(object):
+    """
+    Contains the values found within the ``ChrRaces`` DBC.
+    """
 
     HUMAN     = Race(display_name="Human",     binary=1, id=1)
     ORC       = Race(display_name="Orc",       binary=2 << 0, id=2)
@@ -80,11 +95,15 @@ class ChrRaces(object):
                                              binary=2 << 18, id=20)
     ICE_TROLL = Race(display_name="Ice Troll", binary=2 << 19, id=21)
 
+    #: All World of Warcraft races, both playable and non-playable
     ALL = (HUMAN, ORC, DWARF, NIGHT_ELF, UNDEAD, TAUREN, GNOME, TROLL, GOBLIN,
         BLOOD_ELF, DRAENEI, FEL_ORC, NAGA, BROKEN, SKELETON, VRYKUL, TUSKARR,
         FOREST_TROLL, TAUNKA, NORTHREND_SKELETON, ICE_TROLL)
+
+    #: All playable races in WotLK
     PLAYABLE = (HUMAN, ORC, DWARF, NIGHT_ELF, UNDEAD, TAUREN, GNOME, TROLL,
         BLOOD_ELF, DRAENEI)
+
     ALLIANCE = (HUMAN, DWARF, GNOME, NIGHT_ELF, DRAENEI)
     HORDE = (ORC, UNDEAD, TAUREN, TROLL, BLOOD_ELF)
 
@@ -95,6 +114,7 @@ class ChrRaces(object):
                 return class_
 
 
+# XXX: unused
 CLASS_RACE_COMBOS = {
     ChrRaces.HUMAN.id: (
         ChrClasses.WARRIOR, ChrClasses.PALADIN, ChrClasses.ROGUE,
@@ -144,7 +164,10 @@ CLASS_RACE_COMBOS = {
 
 
 class FactionTemplate(object):
-    """Contains only IDs corresponding to a given faction name."""
+    """
+    Contains faction IDs from the ``FactionTemplate`` DBC.
+    """
+
     ACTOR_EVIL                        = 1684
     ACTOR_EVIL1                       = 1771
     ACTOR_EVIL2                       = 1902
@@ -985,6 +1008,9 @@ class FactionTemplate(object):
 
 
 class NpcFlag(object):
+    """
+    Contains all binary NPC flags.
+    """
 
     GOSSIP             = 1
     QUEST_GIVER        = 2 << 0
@@ -1013,6 +1039,9 @@ class NpcFlag(object):
 
 
 class InventoryType(object):
+    """
+    Contains values used to represent the location of items in the inventory.
+    """
 
     NON_EQUIPABLE   = 0
     HEAD            = 1
