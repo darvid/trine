@@ -36,7 +36,10 @@ def _query(model, what, where):
     _where = []
     for col_name, value in where.items():
         _where.append(get_cmp(table, col_name, value)[0])
-    query = select([getattr(table.c, what)], and_(*_where))
+    what = getattr(table.c, what)
+    if not isinstance(what, list):
+        what = [what]
+    query = select(what, and_(*_where))
     return query
 
 

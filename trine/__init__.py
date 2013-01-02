@@ -190,6 +190,7 @@ class Model(object):
         """
         queries = []
         where = []
+
         if self.method == "update":
             values = {}
             for column in self.table.columns:
@@ -234,8 +235,8 @@ class Model(object):
                 yield self.table.insert().values(**templ)
 
         elif self.method == "create":
-            data = dict([(k, v) for k, v in self.data.items() if k not in
-                ("method", "merge-from", "items", "extended_costs")])
+            data = dict([(k, v) for k, v in self.data.items()
+                if k in self.table.columns])
             pk = None
             for col_name, value in data.items():
                 if getattr(getattr(self.table.c, col_name), "primary_key"):
@@ -353,17 +354,27 @@ class Model(object):
 
     def __repr__(self):
         s = str(self.table)
-        if self.method == "update":
-            name = self.data.get("name", self.data["where"].get("name", ""))
+        if "comment" in self.data:
+            return "%s - %s" % (s, self.data["comment"])
+        def _get_name():
+            name = self.data.get("name",
+                self.data.get("where", {}).get("name",
+                    self.data.get("Title", "")))
             subname = self.data.get("subname",
-                self.data["where"].get("subname", None))
+                self.data.get("where", {}).get("subname", None))
             if isinstance(name, list):
-                name = "where name in %s" % truncate(zip(*name)[1],
-                    list_length=2)
+                if len(name) > 1:
+                    name = "where name in %s" % truncate(zip(*name)[1],
+                        list_length=2)
+                else:
+                    name = truncate(zip(*name)[1][0], 40)
             else:
-                name = truncate(name, 15)
+                name = truncate(name, 40)
             if subname:
                 name += " <%s>" % truncate(subname, 15)
+            return name
+        if self.method == "update":
+            name = _get_name()
             entry = self.data.get("entry",
                 zip(*self.data["where"].get("entry", [])) or None)
             if entry is not None:
@@ -379,6 +390,13 @@ class Model(object):
                 s += truncate(self.data["name"], 20)
                 if "subname" in self.data:
                     s += " <%s>" % truncate(self.data["subname"], 25)
+        elif self.method == "create":
+            for col in self.data:
+                if getattr(self.table.columns, col).primary_key:
+                    s += " [%s]" % str(self.data[col])
+                    break
+            name = _get_name()
+            if name is not None: s += " %s" % name
         else:
             raise NotImplementedError
         return s

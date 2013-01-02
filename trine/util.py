@@ -31,6 +31,7 @@ log = logging.getLogger("trine")
 # trine.constants
 _col_constants_mapping = {
     'AllowableClass': constants.ChrClasses,
+    'AllowableRace': constants.ChrRaces,
     'npcflag': constants.NpcFlag,
     'race': constants.ChrRaces,
     'faction_H': constants.FactionTemplate,
